@@ -73,6 +73,8 @@ parser.add_argument('-d', '--debug', help="Print lots of debugging statements",
                     default=logging.WARNING)
 parser.add_argument('-v', '--verbose', help="Be verbose",
                     action="store_const", dest="loglevel", const=logging.INFO)
+parser.add_argument('--py_log_name', default=None,
+                    help="Name of the log file for smasher.py")
 
 
 # ----------------------------------------------------------------------------
@@ -330,8 +332,13 @@ if __name__ == '__main__':
     given_arguments = vars(parser.parse_args())
 
     # Set up the logger.
-    logging.basicConfig(stream=sys.stderr, level=given_arguments['loglevel'])
+    if given_arguments['py_log_name']:
+        logging.basicConfig(level=given_arguments['loglevel'],
+                            filename=given_arguments['py_log_name'])
+    else:
+        logging.basicConfig(stream=sys.stderr,
+                            level=given_arguments['loglevel'])
 
-    # Pass a dictionary of provided command line arguments as a dictionary
-    # to the user-selected function.
+    # Pass a dictionary of provided command line arguments as a
+    # dictionary to the user-selected function.
     given_arguments['func'](given_arguments)

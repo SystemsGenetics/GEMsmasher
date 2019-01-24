@@ -27,6 +27,9 @@ def show_help() {
 
   Optional Arguments:
 
+    --tag             Optional name to be used in the construction of output
+                      filenames, this defaults to 'GEM'.
+
     --sample_size     Number of features to sample from the gem file.
 
     --output_dir      Directory to save results to, by default this will be a
@@ -67,13 +70,25 @@ if (params.help || !params.gem){ show_help() exit 0 }
 // Create a channel for the input file (the original GEM).
 GEM_ORIGINAL = Channel
   .fromPath(params.gem)
-  .map { file -> tuple(file.baseName, file) }
+  .map { file -> tuple(params.tag, file) }
 
 // Manage the optional skipping of the subset process.
 // See official nextflow examples for a discussion of this code.
 (FULL_GEM_A, FULL_GEM_B) = ( params.sample_size.toString().isInteger()
-                       ? [GEM_ORIGINAL, Channel.empty()]
-                       : [Channel.empty(), GEM_ORIGINAL])
+                         ? [GEM_ORIGINAL, Channel.empty()]
+                         : [Channel.empty(), GEM_ORIGINAL])
+
+
+// Prepare the logging configuration for all processes.
+// This may disallow the 'task.ext.logging' value from being null,
+// perhaps it can only be an empty string.
+// TODO: Consider refactoring this function, it is very ad-hoc and
+//       unlikely to be very robust to configuration changes.
+def prep_smasherPy_log_args(task) {
+  ( task.ext.log_smasherPy
+  ? "${task.ext.logging} --py_log_name ${task.ext.python_log_file}"
+  : "${task.ext.logging}")
+}
 
 
 
@@ -98,7 +113,7 @@ process Subsample_GEM {
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i $gem -t $cluster_ID \
   subsample-gem --size ${params.sample_size}
   """
