@@ -14,11 +14,17 @@ Matrix (GEM) files.
 nextflow run main.nf --gem="gem_file_path.GEM"
 ```
 
+*Running from github.*
+```
+nextflow run SystemsGenetics/GEMsmasher --gem="gem_file_path.GEM"
+# or
+nextflow run SystemsGenetics/GEMsmasher --gem="gem_file_path.GEM" --sample_size 1000
+```
+
 *Run using a subsample of the GEM file.*
 
 ```
-nextflow run main.nf --gem="gem_file_path.GEM" \
---sample_size 1000
+nextflow run main.nf --gem="gem_file_path.GEM" --sample_size 1000
 ```
 
 *With Kamiak's `/scidas` mounted*
@@ -39,8 +45,8 @@ nextflow run main.nf \
 
 ### TODO
 
-+ [ ] Enable remote execution with github.
++ [x] Enable remote execution with github.
 + [x] Replace basic `nextflow.config` options with CLI arguments.
-+ [ ] Move project to the SystemsGenetics Github repository.
++ [x] Move project to the SystemsGenetics Github repository.
 + [ ] Implement cluster scoring.
 + [ ] Implement a visualization / tree graph of the created clusters.
