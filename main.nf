@@ -27,6 +27,9 @@ def show_help() {
 
   Optional Arguments:
 
+    --tag             Optional name to be used in the construction of output
+                      filenames, this defaults to 'GEM'.
+
     --sample_size     Number of features to sample from the gem file.
 
     --output_dir      Directory to save results to, by default this will be a
@@ -45,11 +48,11 @@ def prep_kwargs(param_args) { param_args ? "--key_pairs ${param_args}" : "" }
 // Begin displaying stuff.
 log.info"""
 ===============================================================================
-                ┏━━━┓                           ╭□
-        ◿ □ ◺   ┃   ╠══════════════════╗      ╭□┤
-        □ ◪ ■   ┃   ║  G.E.M. Smasher  ║     ◪┤ ╭■
-        ◹ ■ ◤   ┃   ╠═════╤════╤═══════╝      ╰■┤
-                ┗━━━┛     ┆    ┆                ╰◤
+                ┏━━━┓                             ╭□
+        ◿ □ ◺   ┃   ╠══════════════════╗       ╭□ ┤
+        □ ◪ ■   ┃   ║  G.E.M. Smasher  ║     ◪ ┤  ╭■
+        ◹ ■ ◤   ┃   ╠═════╤════╤═══════╝       ╰■ ┤
+                ┗━━━┛     ┆    ┆                  ╰◤
 
 ===============================================================================
 
@@ -67,13 +70,25 @@ if (params.help || !params.gem){ show_help() exit 0 }
 // Create a channel for the input file (the original GEM).
 GEM_ORIGINAL = Channel
   .fromPath(params.gem)
-  .map { file -> tuple(file.baseName, file) }
+  .map { file -> tuple(params.tag, file) }
 
 // Manage the optional skipping of the subset process.
 // See official nextflow examples for a discussion of this code.
 (FULL_GEM_A, FULL_GEM_B) = ( params.sample_size.toString().isInteger()
-                       ? [GEM_ORIGINAL, Channel.empty()]
-                       : [Channel.empty(), GEM_ORIGINAL])
+                         ? [GEM_ORIGINAL, Channel.empty()]
+                         : [Channel.empty(), GEM_ORIGINAL])
+
+
+// Prepare the logging configuration for all processes.
+// This may disallow the 'task.ext.logging' value from being null,
+// perhaps it can only be an empty string.
+// TODO: Consider refactoring this function, it is very ad-hoc and
+//       unlikely to be very robust to configuration changes.
+def prep_smasherPy_log_args(task) {
+  ( task.ext.log_smasherPy
+  ? "${task.ext.logging} --py_log_name ${task.ext.python_log_file}"
+  : "${task.ext.logging}")
+}
 
 
 
@@ -98,7 +113,7 @@ process Subsample_GEM {
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i $gem -t $cluster_ID \
   subsample-gem --size ${params.sample_size}
   """
@@ -124,7 +139,7 @@ process Normalize_GEM {
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i $gem -t $cluster_ID \
   normalize-gem --method ${params.normalization_method} \
     ${prep_kwargs("${task.ext.normal_kwargs}")}
@@ -144,7 +159,7 @@ For now only basic file input is implemented.
 NORMALIZED_GEM_SUBSETS = Channel.create()
 NORMAL_GEMS = NORMALIZED_GEM
   .mix(NORMALIZED_GEM_SUBSETS)
-  .until { it=="None" }
+  // .until { it=="None" }
 
 
 
@@ -168,7 +183,7 @@ process Dimensional_Reduction {
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i ${normal_gem} -t ${cluster_id} \
   run-umap \
     ${prep_kwargs("${task.ext.reduction}")}
@@ -194,11 +209,11 @@ process Cluster {
     set val(cluster_id), file(reduced_gem) from REDUCED_GEM
 
   output:
-    set val(cluster_id), file("clusters_${cluster_id}.csv") into CLUSTER_LABELS_A
+    set val(cluster_id), file("clusters_*.csv") into CLUSTER_LABELS_A
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i $reduced_gem -t $cluster_id \
   cluster \
     ${prep_kwargs("${task.ext.cluster}")}
@@ -219,19 +234,21 @@ process Subset_GEM {
 
   input:
     set val(cluster_id), file(cluster_labels) from CLUSTER_LABELS_A
-    // Use a ternary operator to select either the complete GEM, or the
-    // subset created earlier.
-    file(original_gem) from file( params.sample_size.toString().isInteger()
-                                  ? "${baseDir}/gem_subsamples/sample_*.csv"
-                                  : "${params.gem}" )
+    // Use a ternary operator to select either the complete GEM,
+    // or the subset created earlier.
+    file(original_gem) from file(
+      params.sample_size.toString().isInteger()
+      ? "${params.output_dir}/gem_subsamples/sample_${params.tag}.csv"
+      : "${params.gem}"
+    )
 
   output:
-    set val(cluster_id), file("subset_*.csv") optional true into GEM_SUBSET_A mode flatten
+    file("subset_*.csv") optional true into SUBSET_LIST
 
   script:
   """
-  smasher.py ${task.ext.logging} \
-    -i ${cluster_labels} -t ${cluster_id} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
+    -i ${cluster_labels} -t ${params.tag} \
   subset-gem \
     --originalGEM ${original_gem} \
     --minsize ${params.min_subset_size} \
@@ -240,6 +257,23 @@ process Subset_GEM {
   """
 }
 
+
+SUBSET_GROUP = Channel.create()
+WORFKLOW_EXIT = Channel.create()
+GEM_SUBSETS = Channel.create()
+// Check if the subset output is an empty list, and if so route a signal
+// to a terminator process.
+SUBSET_LIST.choice( SUBSET_GROUP, WORFKLOW_EXIT ) { item ->
+  if ( item.isEmpty() ) { 1 }
+  else { 0 }
+}
+
+WORFKLOW_EXIT.subscribe { log.info "No viable clusters, or maximum depth reached." }
+
+SUBSET_GROUP
+  .flatten()
+  .map { item -> tuple("${params.tag}_${item.baseName}".replace("subset_", ""), item) }
+  .into { GEM_SUBSETS }
 
 
 // /*******************************************************************************
@@ -277,14 +311,14 @@ process Normalize_GEM_Subset {
   tag { cluster_id }
 
   input:
-    set val(cluster_id), file(gem_subset) from GEM_SUBSET_A
+    set val(cluster_id), file(gem_subset) from GEM_SUBSETS
 
   output:
-    set stdout, file("normal_*.csv") into NORMALIZED_GEM_SUBSETS
+    set val(cluster_id), file("normal_*.csv") into NORMALIZED_GEM_SUBSETS
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i ${gem_subset} -t ${cluster_id} \
   normalize-gem-subset \
     --method ${params.normalization_method} \
