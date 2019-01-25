@@ -3,6 +3,10 @@
 Pipeline for extracting sub-networks from Gene Expression
 Matrix (GEM) files.
 
+***In Development***
+
+*This project may not work, or give meaningful results.*
+
 #### Author(s)
 + Tyler D. Biggs
 
@@ -55,8 +59,15 @@ bash bin/cleanup.sh
 
 ### TODO
 
-+ [x] Enable remote execution with github.
++ [x] Enable remote execution with GitHub.
 + [x] Replace basic `nextflow.config` options with CLI arguments.
-+ [x] Move project to the SystemsGenetics Github repository.
++ [x] Move project to the `SystemsGenetics` GitHub repository.
 + [ ] Implement cluster scoring.
 + [ ] Implement a visualization / tree graph of the created clusters.
++ [ ] Implement variational autoencoder.
+
+
+
+I have a process with multiple optional output files. It is part of a recursive
+workflow. I am having trouble finding an elegant way to have the workflow
+terminate if this process does not produce any output. Any advice?

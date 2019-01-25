@@ -159,7 +159,7 @@ For now only basic file input is implemented.
 NORMALIZED_GEM_SUBSETS = Channel.create()
 NORMAL_GEMS = NORMALIZED_GEM
   .mix(NORMALIZED_GEM_SUBSETS)
-  .until { it=="None" }
+  // .until { it=="None" }
 
 
 
@@ -243,7 +243,7 @@ process Subset_GEM {
     )
 
   output:
-    file("subset_*.csv") into ALL_GEM_SUBSETS mode flatten
+    file("subset_*.csv") optional true into SUBSET_LIST
 
   script:
   """
@@ -258,10 +258,22 @@ process Subset_GEM {
 }
 
 
-GEM_SUBSETS = ALL_GEM_SUBSETS.map {
-  file -> tuple("${params.tag}_${file.baseName}".replace("subset_", ""), file)
+SUBSET_GROUP = Channel.create()
+WORFKLOW_EXIT = Channel.create()
+GEM_SUBSETS = Channel.create()
+// Check if the subset output is an empty list, and if so route a signal
+// to a terminator process.
+SUBSET_LIST.choice( SUBSET_GROUP, WORFKLOW_EXIT ) { item ->
+  if ( item.isEmpty() ) { 1 }
+  else { 0 }
 }
 
+WORFKLOW_EXIT.subscribe { log.info "No viable clusters, or maximum depth reached." }
+
+SUBSET_GROUP
+  .flatten()
+  .map { item -> tuple("${params.tag}_${item.baseName}".replace("subset_", ""), item) }
+  .into { GEM_SUBSETS }
 
 
 // /*******************************************************************************

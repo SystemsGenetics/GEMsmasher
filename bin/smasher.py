@@ -2,6 +2,16 @@
 
 """Smasher.py is a collection of functions used in gem-smasher.
 
+The `Smasher` module contains simple python functions that happen
+to share a similar set of requirements for arguments. The functions
+within this module should save and read files in the same format.
+Based on another related project, `GEMmaker`, this format should be
+tab-delimeted data files.
+
+The class `StoreDictKeyPair` allows the transfer of a series of
+(undefined) keyword arguments to be passed to a given Python function
+directly from Nextflow (or the command line), without havint to define
+those arguments with `argparse`.
 """
 
 
@@ -253,7 +263,6 @@ def subset_gem(args):
     # Ensure the tree is not too deep.
     if new_depth >= args['max_depth']:
         logging.info(f"Rank limit of {args['max_depth']} reached.")
-        sys.stdout.write("None")
         exit(0)
 
     # Add the clustring group IDs to the dataframe.
@@ -283,7 +292,7 @@ def subset_gem(args):
 
         # Build the new cluster ID and output file name, then save.
         outfile = f"subset_{new_id}.csv"
-        logging.debug(f"New subset: {new_depth} saved to: {outfile}")
+        logging.debug(f"New subset of depth: {new_depth} saved to: {outfile}")
         subset.to_csv(outfile)
 
 

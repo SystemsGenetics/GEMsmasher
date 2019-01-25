@@ -14,3 +14,4 @@ reduction
 normalized_gems/
 gem_subsamples/
 normal_gem_subset/
+*.log
