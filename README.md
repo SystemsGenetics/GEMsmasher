@@ -43,6 +43,16 @@ nextflow run main.nf \
 --sample_size=1000 | lolcat
 ```
 
+*Cleaning up a previous run.*
+
+This will force your `conda` image to rebuild next time you run. To
+prevent this you can define the `--cacheDir` as a command line argument
+to specify a different location for `conda` environments to be stored.
+
+```
+bash bin/cleanup.sh
+```
+
 ### TODO
 
 + [x] Enable remote execution with github.

@@ -48,11 +48,11 @@ def prep_kwargs(param_args) { param_args ? "--key_pairs ${param_args}" : "" }
 // Begin displaying stuff.
 log.info"""
 ===============================================================================
-                ┏━━━┓                           ╭□
-        ◿ □ ◺   ┃   ╠══════════════════╗      ╭□┤
-        □ ◪ ■   ┃   ║  G.E.M. Smasher  ║     ◪┤ ╭■
-        ◹ ■ ◤   ┃   ╠═════╤════╤═══════╝      ╰■┤
-                ┗━━━┛     ┆    ┆                ╰◤
+                ┏━━━┓                             ╭□
+        ◿ □ ◺   ┃   ╠══════════════════╗       ╭□ ┤
+        □ ◪ ■   ┃   ║  G.E.M. Smasher  ║     ◪ ┤  ╭■
+        ◹ ■ ◤   ┃   ╠═════╤════╤═══════╝       ╰■ ┤
+                ┗━━━┛     ┆    ┆                  ╰◤
 
 ===============================================================================
 
@@ -139,7 +139,7 @@ process Normalize_GEM {
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i $gem -t $cluster_ID \
   normalize-gem --method ${params.normalization_method} \
     ${prep_kwargs("${task.ext.normal_kwargs}")}
@@ -183,7 +183,7 @@ process Dimensional_Reduction {
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i ${normal_gem} -t ${cluster_id} \
   run-umap \
     ${prep_kwargs("${task.ext.reduction}")}
@@ -209,11 +209,11 @@ process Cluster {
     set val(cluster_id), file(reduced_gem) from REDUCED_GEM
 
   output:
-    set val(cluster_id), file("clusters_${cluster_id}.csv") into CLUSTER_LABELS_A
+    set val(cluster_id), file("clusters_*.csv") into CLUSTER_LABELS_A
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i $reduced_gem -t $cluster_id \
   cluster \
     ${prep_kwargs("${task.ext.cluster}")}
@@ -234,25 +234,32 @@ process Subset_GEM {
 
   input:
     set val(cluster_id), file(cluster_labels) from CLUSTER_LABELS_A
-    // Use a ternary operator to select either the complete GEM, or the
-    // subset created earlier.
-    file(original_gem) from file( params.sample_size.toString().isInteger()
-                                  ? "${baseDir}/gem_subsamples/sample_*.csv"
-                                  : "${params.gem}" )
+    // Use a ternary operator to select either the complete GEM,
+    // or the subset created earlier.
+    file(original_gem) from file(
+      params.sample_size.toString().isInteger()
+      ? "${params.output_dir}/gem_subsamples/sample_${params.tag}.csv"
+      : "${params.gem}"
+    )
 
   output:
-    set val(cluster_id), file("subset_*.csv") optional true into GEM_SUBSET_A mode flatten
+    file("subset_*.csv") into ALL_GEM_SUBSETS mode flatten
 
   script:
   """
-  smasher.py ${task.ext.logging} \
-    -i ${cluster_labels} -t ${cluster_id} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
+    -i ${cluster_labels} -t ${params.tag} \
   subset-gem \
     --originalGEM ${original_gem} \
     --minsize ${params.min_subset_size} \
     --max_depth ${params.max_depth} \
     ${prep_kwargs("${task.ext.subset}")}
   """
+}
+
+
+GEM_SUBSETS = ALL_GEM_SUBSETS.map {
+  file -> tuple("${params.tag}_${file.baseName}".replace("subset_", ""), file)
 }
 
 
@@ -292,14 +299,14 @@ process Normalize_GEM_Subset {
   tag { cluster_id }
 
   input:
-    set val(cluster_id), file(gem_subset) from GEM_SUBSET_A
+    set val(cluster_id), file(gem_subset) from GEM_SUBSETS
 
   output:
-    set stdout, file("normal_*.csv") into NORMALIZED_GEM_SUBSETS
+    set val(cluster_id), file("normal_*.csv") into NORMALIZED_GEM_SUBSETS
 
   script:
   """
-  smasher.py ${task.ext.logging} \
+  smasher.py ${prep_smasherPy_log_args(task)} \
     -i ${gem_subset} -t ${cluster_id} \
   normalize-gem-subset \
     --method ${params.normalization_method} \
