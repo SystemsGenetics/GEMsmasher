@@ -47,6 +47,14 @@ nextflow run main.nf \
 --sample_size=1000 | lolcat
 ```
 
+*Run on Kamiak*
+
+Submit an sbatch job that runs the workflow.
+
+```
+sbatch /scidas/tyler/GEMsmasher/scripts/smashgem.sh
+```
+
 *Cleaning up a previous run.*
 
 This will force your `conda` image to rebuild next time you run. To
